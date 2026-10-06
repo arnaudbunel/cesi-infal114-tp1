@@ -14,6 +14,7 @@ import com.formation.qualite.boutique.model.Product;
 import com.formation.qualite.boutique.repository.CustomerRepository;
 import com.formation.qualite.boutique.repository.OrderRepository;
 import com.formation.qualite.boutique.repository.ProductRepository;
+import com.formation.qualite.boutique.service.notification.OrderNotifier;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,9 @@ class OrderServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private OrderNotifier notifier;
+
     private OrderService orderService;
 
     private Customer standardCustomer;
@@ -41,7 +45,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(customerRepository, productRepository, orderRepository);
+        orderService = new OrderService(customerRepository, productRepository, orderRepository, notifier);
 
         standardCustomer = new Customer("Alice Martin", "alice.martin@example.com", CustomerType.STANDARD);
         standardCustomer.setId(1L);

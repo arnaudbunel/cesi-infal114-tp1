@@ -21,32 +21,10 @@ public class InvoiceService {
             total = total + (line.getUnitPrice() * line.getQuantity());
         }
 
-        double discountRate;
-        if (customer.getType() == CustomerType.PREMIUM) {
-            if (total > 1000) {
-                discountRate = 0.15;
-            } else {
-                discountRate = 0.10;
-            }
-        } else {
-            if (total > 1000) {
-                discountRate = 0.05;
-            } else {
-                discountRate = 0;
-            }
-        }
-
-        double discount = total * discountRate;
-        double netAmount = total - discount;
-
-        double shipping;
-        if (netAmount > 500) {
-            shipping = 0;
-        } else {
-            shipping = 20;
-        }
-
-        double invoiceTotal = netAmount + shipping;
+        double[] amounts = calc(customer, total);
+        double discount = amounts[0];
+        double shipping = amounts[1];
+        double invoiceTotal = total - discount + shipping;
 
         StringBuilder invoice = new StringBuilder();
         invoice.append("Facture - Commande #").append(order.getId()).append("\n");
@@ -62,5 +40,34 @@ public class InvoiceService {
         invoice.append("Total : ").append(invoiceTotal).append(" EUR");
 
         return invoice.toString();
+    }
+
+    private double[] calc(Customer c, double total) {
+        double rate;
+        if (c.getType() == CustomerType.PREMIUM) {
+            if (total > 1000) {
+                rate = 0.15;
+            } else {
+                rate = 0.10;
+            }
+        } else {
+            if (total > 1000) {
+                rate = 0.05;
+            } else {
+                rate = 0;
+            }
+        }
+
+        double discountAmount = total * rate;
+        double tmp = total - discountAmount;
+
+        double shippingFee;
+        if (tmp > 500) {
+            shippingFee = 0;
+        } else {
+            shippingFee = 20;
+        }
+
+        return new double[] {discountAmount, shippingFee};
     }
 }

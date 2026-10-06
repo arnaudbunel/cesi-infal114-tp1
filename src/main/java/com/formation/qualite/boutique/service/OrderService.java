@@ -3,6 +3,7 @@ package com.formation.qualite.boutique.service;
 import com.formation.qualite.boutique.dto.CreateOrderRequest;
 import com.formation.qualite.boutique.dto.OrderLineRequest;
 import com.formation.qualite.boutique.model.Customer;
+import com.formation.qualite.boutique.model.CustomerType;
 import com.formation.qualite.boutique.model.Order;
 import com.formation.qualite.boutique.model.OrderLine;
 import com.formation.qualite.boutique.model.OrderStatus;
@@ -12,6 +13,7 @@ import com.formation.qualite.boutique.repository.OrderRepository;
 import com.formation.qualite.boutique.repository.ProductRepository;
 import com.formation.qualite.boutique.service.exception.InsufficientStockException;
 import com.formation.qualite.boutique.service.exception.ResourceNotFoundException;
+import com.formation.qualite.boutique.service.notification.OrderNotifier;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -22,12 +24,14 @@ public class OrderService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
+    private final OrderNotifier notifier;
 
     public OrderService(CustomerRepository customerRepository, ProductRepository productRepository,
-            OrderRepository orderRepository) {
+            OrderRepository orderRepository, OrderNotifier notifier) {
         this.customerRepository = customerRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
+        this.notifier = notifier;
     }
 
     public Order createOrder(CreateOrderRequest request) {
@@ -86,21 +90,12 @@ public class OrderService {
 
         order.setGrossAmount(grossAmount);
 
-        double discountRate = calc(c, grossAmount);
-        double discountAmount = grossAmount * discountRate;
+        double[] amounts = calc(c, grossAmount);
+        double discountAmount = amounts[0];
+        double shippingFee = amounts[1];
         order.setDiscountAmount(discountAmount);
-
-        double tmp = grossAmount - discountAmount;
-
-        double shippingFee;
-        if (tmp > 500) {
-            shippingFee = 0;
-        } else {
-            shippingFee = 20;
-        }
         order.setShippingFee(shippingFee);
-
-        order.setFinalAmount(tmp + shippingFee);
+        order.setFinalAmount(grossAmount - discountAmount + shippingFee);
         order.setStatus(OrderStatus.CREATED);
 
         int totalItems = 0;
@@ -126,9 +121,9 @@ public class OrderService {
         return saved;
     }
 
-    private double calc(Customer c, double total) {
+    private double[] calc(Customer c, double total) {
         double rate;
-        if (c.getType() == com.formation.qualite.boutique.model.CustomerType.PREMIUM) {
+        if (c.getType() == CustomerType.PREMIUM) {
             if (total > 1000) {
                 rate = 0.15;
             } else {
@@ -141,7 +136,18 @@ public class OrderService {
                 rate = 0;
             }
         }
-        return rate;
+
+        double discountAmount = total * rate;
+        double tmp = total - discountAmount;
+
+        double shippingFee;
+        if (tmp > 500) {
+            shippingFee = 0;
+        } else {
+            shippingFee = 20;
+        }
+
+        return new double[] {discountAmount, shippingFee};
     }
 
     /**
@@ -161,7 +167,9 @@ public class OrderService {
             throw new IllegalStateException("Seule une commande CREATED peut etre payee");
         }
         order.setStatus(OrderStatus.PAID);
-        return orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        notifier.notifyPaid(saved);
+        return saved;
     }
 
     public Order shipOrder(Long id) {
@@ -173,7 +181,9 @@ public class OrderService {
             throw new IllegalStateException("Seule une commande PAID peut etre expediee");
         }
         order.setStatus(OrderStatus.SHIPPED);
-        return orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        notifier.notifyShipped(saved);
+        return saved;
     }
 
     public Order cancelOrder(Long id) {
@@ -182,7 +192,9 @@ public class OrderService {
             throw new IllegalStateException("Une commande expediee ne peut plus etre annulee");
         }
         order.setStatus(OrderStatus.CANCELLED);
-        return orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        notifier.notifyCancelled(saved);
+        return saved;
     }
 
     public List<Order> getAllOrders() {
