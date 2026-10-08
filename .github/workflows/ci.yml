@@ -6,7 +6,11 @@ name: CI
 # etre ajoutees par la suite.
 on:
   push:
-    branches: [main]
+    branches:
+      - groupe0
+      - groupe1
+      - groupe2
+      - groupe3
   pull_request:
     branches: [main]
 

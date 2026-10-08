@@ -61,6 +61,12 @@ La console H2 est disponible sur `http://localhost:8080/h2-console`
 | `mvn test` | Execute les tests unitaires et genere le rapport de couverture JaCoCo (`target/site/jacoco/index.html`) |
 | `mvn clean verify` | Compile, teste et construit le projet |
 
+## Analyse de qualite (SonarQube)
+
+Le TP s'appuie sur un serveur SonarQube mutualise. Voir
+[README-SONAR.md](README-SONAR.md) pour la marche a suivre (connexion,
+lancement d'une analyse, lecture des resultats).
+
 ## Endpoints disponibles
 
 ### Clients
