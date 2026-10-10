@@ -40,10 +40,10 @@ couverture, puis lancer l'analyse :
 ```bash
 mvn clean verify \
   org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-  -Dsonar.host.url=https://sonarqube.techsolutionsbyab.app/ \
-  -Dsonar.projectKey=<project-key-de-votre-groupe> \
-  -Dsonar.token=<votre-token> \
-  -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+  "-Dsonar.host.url=https://sonarqube.techsolutionsbyab.app/" \
+  "-Dsonar.projectKey=<project-key-de-votre-groupe>" \
+  "-Dsonar.token=<votre-token>" \
+  "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
 ```
 
 Remplacez `<project-key-de-votre-groupe>` et `<votre-token>` par les
