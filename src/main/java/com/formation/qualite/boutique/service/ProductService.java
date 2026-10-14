@@ -16,7 +16,14 @@ public class ProductService {
     }
 
     public Product createProduct(Product product) {
+        if (isFreeProduct(product)) {
+            System.out.println("Produit cree a prix nul : " + product.getName());
+        }
         return productRepository.save(product);
+    }
+
+    private boolean isFreeProduct(Product product) {
+        return product.getUnitPrice() == 0;
     }
 
     public List<Product> getAllProducts() {

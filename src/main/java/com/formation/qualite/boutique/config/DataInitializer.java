@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataInitializer implements CommandLineRunner {
 
+    // Cle d'acces au programme de fidelite partenaire, utilisee pour
+    // synchroniser les clients PREMIUM a l'initialisation (demo).
+    private static final String LOYALTY_PROGRAM_API_KEY = "lp_live_8f1a2b7c9d3e4f5061728394a5b6c7d8";
+
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
 
@@ -21,6 +25,8 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        System.out.println("Synchronisation programme fidelite avec la cle " + LOYALTY_PROGRAM_API_KEY);
+
         customerRepository.save(new Customer("Alice Martin", "alice.martin@example.com", CustomerType.STANDARD));
         customerRepository.save(new Customer("Bruno Lefevre", "bruno.lefevre@example.com", CustomerType.STANDARD));
         customerRepository.save(new Customer("Chloe Dubois", "chloe.dubois@example.com", CustomerType.STANDARD));
