@@ -54,7 +54,9 @@
             <!--
                 JaCoCo genere le rapport de couverture a chaque "mvn test".
                 Rapport HTML : target/site/jacoco/index.html
-                Aucun seuil minimal n'est impose pour le moment (pas de Quality Gate local).
+                Seuil minimal verifie par "mvn verify" (execution coverage-check),
+                aligne sur la Quality Gate : 80 % des lignes et des branches.
+                En CI : mvn jacoco:check@coverage-check
             -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -72,6 +74,64 @@
                         <phase>test</phase>
                         <goals>
                             <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>coverage-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Lint : regles Checkstyle de config/checkstyle/checkstyle.xml,
+                verifiees par "mvn verify". En CI : mvn checkstyle:check@lint
+                La version de Checkstyle est forcee : celle fournie par defaut
+                par le plugin (9.3) ne connait pas toute la syntaxe Java 21.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>10.26.1</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+                    <consoleOutput>true</consoleOutput>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>lint</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -1,9 +1,11 @@
 name: CI
 
-# Pipeline minimal : compilation et execution des tests a chaque push
-# et pull request sur main. Des etapes supplementaires (analyse
-# statique, Quality Gate, publication de couverture...) pourront
-# etre ajoutees par la suite.
+# Pipeline qualite. Ordre des etapes :
+#   Checkout -> Build -> Lint -> Tests -> Couverture -> Analyse statique
+#   -> Quality Gate -> Packaging
+# Les controles les plus rapides passent en premier (echouer vite, a
+# moindre cout) et chaque etape ne s'execute que si les precedentes ont
+# reussi : le jar n'est produit que si tous les controles sont au vert.
 on:
   push:
     branches:
@@ -14,13 +16,30 @@ on:
   pull_request:
     branches: [main]
 
+# Moindre privilege : le pipeline lit le depot, il n'y ecrit rien.
+permissions:
+  contents: read
+
+# Un nouveau push sur la meme branche annule l'execution devenue inutile.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Surchargeable par une variable de depot SONAR_HOST_URL.
+  SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarqube.techsolutionsbyab.app' }}
+
 jobs:
-  build-and-test:
+  pipeline-qualite:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout du code
+      - name: 1. Checkout du code
         uses: actions/checkout@v6.1.0
+        with:
+          # Historique complet : SonarQube s'en sert pour le "New Code" et le blame.
+          fetch-depth: 0
 
       - name: Installation de Java 21
         uses: actions/setup-java@v6.0.1
@@ -29,5 +48,71 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Compilation et tests
+      # BLOQUANT : du code qui ne compile pas ne peut etre ni teste ni livre.
+      - name: 2. Build (compilation du code et des tests)
+        run: mvn --batch-mode test-compile
+
+      # BLOQUANT : regles de config/checkstyle/checkstyle.xml, 0 violation toleree.
+      - name: 3. Lint (Checkstyle)
+        run: mvn --batch-mode checkstyle:check@lint
+
+      # BLOQUANT : un test en echec signale une regression.
+      - name: 4. Tests (unitaires et integration)
         run: mvn --batch-mode test
+
+      # BLOQUANT : au moins 80 % des lignes et des branches couvertes.
+      - name: 5. Couverture (seuil JaCoCo)
+        run: mvn --batch-mode jacoco:check@coverage-check
+
+      # BLOQUANT sur push. Pas d'analyse sur les pull requests : les secrets
+      # ne sont pas transmis aux forks et l'edition Community de SonarQube
+      # n'analyse pas les pull requests. La Quality Gate s'applique donc au
+      # push de chaque branche de groupe.
+      - name: 6. Analyse statique (SonarQube)
+        if: github.event_name == 'push'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::error::Secret SONAR_TOKEN absent : analyse et Quality Gate impossibles."
+            exit 1
+          fi
+          # Branche groupeN -> projet SonarQube tpfilrouge-gN
+          mvn --batch-mode org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
+            -Dsonar.projectKey="tpfilrouge-g${GITHUB_REF_NAME#groupe}" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+
+      # BLOQUANT : echoue si la Quality Gate du projet est en echec.
+      # Action tierce epinglee sur un commit (et non un tag modifiable).
+      - name: 7. Quality Gate SonarQube
+        if: github.event_name == 'push'
+        uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1.2.1
+        with:
+          scanMetadataReportFile: target/sonar/report-task.txt
+          pollingTimeoutSec: 300
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Les tests ont deja tourne a l'etape 4 : inutile de les rejouer.
+      - name: 8. Packaging (jar executable)
+        run: mvn --batch-mode package -DskipTests
+
+      - name: Publication du jar
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: boutique-api
+          path: target/boutique-api-*.jar
+          retention-days: 7
+
+      # INFORMATIF : rapports publies meme en cas d'echec, pour le diagnostic.
+      - name: Publication des rapports de tests, couverture et lint
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: rapports-qualite
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+            target/checkstyle-result.xml
+          if-no-files-found: ignore
+          retention-days: 7

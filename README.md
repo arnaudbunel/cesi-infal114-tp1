@@ -60,13 +60,36 @@ La console H2 est disponible sur `http://localhost:8080/h2-console`
 |---|---|
 | `mvn spring-boot:run` | Demarre l'application |
 | `mvn test` | Execute les tests unitaires et genere le rapport de couverture JaCoCo (`target/site/jacoco/index.html`) |
-| `mvn clean verify` | Compile, teste et construit le projet |
+| `mvn clean verify` | Compile, teste et construit le projet, puis verifie le lint (Checkstyle) et le seuil de couverture (80 %) |
 
 ## Analyse de qualite (SonarQube)
 
 Le TP s'appuie sur un serveur SonarQube mutualise. Voir
 [README-SONAR.md](README-SONAR.md) pour la marche a suivre (connexion,
 lancement d'une analyse, lecture des resultats).
+
+## Pipeline CI
+
+Le workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) enchaine,
+a chaque push sur une branche de groupe :
+
+```
+Checkout -> Build -> Lint -> Tests -> Couverture -> Analyse statique -> Quality Gate -> Packaging
+```
+
+| Etape | Outil | Effet en cas d'echec |
+|---|---|---|
+| Build | `mvn test-compile` | Bloquant |
+| Lint | Checkstyle (`config/checkstyle/checkstyle.xml`) | Bloquant |
+| Tests | JUnit, `mvn test` | Bloquant |
+| Couverture | JaCoCo, seuil de 80 % des lignes et des branches | Bloquant |
+| Analyse statique | SonarQube (push uniquement) | Bloquant si l'analyse ne peut pas s'executer |
+| Quality Gate | Quality Gate du projet SonarQube | Bloquant |
+| Packaging | `mvn package`, jar publie en artefact | Bloquant |
+| Rapports | Tests, couverture et lint publies en artefact | Informatif |
+
+Prerequis : un secret de depot `SONAR_TOKEN` contenant le jeton d'analyse
+du groupe. La branche `groupeN` est analysee dans le projet `tpfilrouge-gN`.
 
 ## Endpoints disponibles
 
