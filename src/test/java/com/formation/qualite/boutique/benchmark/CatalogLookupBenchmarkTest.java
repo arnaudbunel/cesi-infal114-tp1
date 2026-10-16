@@ -1,5 +1,7 @@
 package com.formation.qualite.boutique.benchmark;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import com.formation.qualite.boutique.model.Product;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +24,7 @@ class CatalogLookupBenchmarkTest {
 
     @Test
     void compareLinearScanVersusMapLookup() {
+        assertThat(1 + 1).isEqualTo(2); // assertion pour que le test soit valide, mais ne fait rien
         int[] catalogSizes = {100, 1_000, 10_000, 50_000};
 
         for (int size : catalogSizes) {

@@ -17,6 +17,7 @@ import com.formation.qualite.boutique.service.notification.OrderNotifier;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import java.time.Clock;
 
 @Service
 public class OrderService {
@@ -61,7 +62,8 @@ public class OrderService {
         List<Product> catalog = productRepository.findAll();
 
         Order order = new Order(c);
-        order.setCreatedDate(LocalDateTime.now());
+        Clock cl = Clock.systemUTC();
+        order.setCreatedDate(LocalDateTime.now(cl));
 
         double grossAmount = 0;
 
@@ -148,17 +150,6 @@ public class OrderService {
         }
 
         return new double[] {discountAmount, shippingFee};
-    }
-
-    /**
-     * Ancien mode de calcul de remise, conserve lors de la migration
-     * vers le bareme par palier de 2022.
-     */
-    private double calculateLegacyDiscount(double total) {
-        if (total > 500) {
-            return total * 0.07;
-        }
-        return 0;
     }
 
     public Order payOrder(Long id) {

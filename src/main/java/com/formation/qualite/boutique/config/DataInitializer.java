@@ -5,27 +5,40 @@ import com.formation.qualite.boutique.model.CustomerType;
 import com.formation.qualite.boutique.model.Product;
 import com.formation.qualite.boutique.repository.CustomerRepository;
 import com.formation.qualite.boutique.repository.ProductRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
 
-    // Cle d'acces au programme de fidelite partenaire, utilisee pour
-    // synchroniser les clients PREMIUM a l'initialisation (demo).
-    private static final String LOYALTY_PROGRAM_API_KEY = "lp_live_8f1a2b7c9d3e4f5061728394a5b6c7d8";
+    private static final Logger LOGGER = LoggerFactory.getLogger(DataInitializer.class);
 
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
 
-    public DataInitializer(CustomerRepository customerRepository, ProductRepository productRepository) {
+    // Cle d'acces au programme de fidelite partenaire, utilisee pour
+    // synchroniser les clients PREMIUM a l'initialisation (demo).
+    // Fournie par la variable d'environnement LOYALTY_PROGRAM_API_KEY.
+    private final String loyaltyProgramApiKey;
+
+    public DataInitializer(CustomerRepository customerRepository,
+                           ProductRepository productRepository,
+                           @Value("${loyalty.program.api-key}") String loyaltyProgramApiKey) {
         this.customerRepository = customerRepository;
         this.productRepository = productRepository;
+        this.loyaltyProgramApiKey = loyaltyProgramApiKey;
     }
 
     @Override
     public void run(String... args) {
-        System.out.println("Synchronisation programme fidelite avec la cle " + LOYALTY_PROGRAM_API_KEY);
+        if (loyaltyProgramApiKey.isBlank()) {
+            LOGGER.warn("Cle du programme fidelite absente : synchronisation ignoree");
+        } else {
+            LOGGER.info("Synchronisation programme fidelite");
+        }
 
         customerRepository.save(new Customer("Alice Martin", "alice.martin@example.com", CustomerType.STANDARD));
         customerRepository.save(new Customer("Bruno Lefevre", "bruno.lefevre@example.com", CustomerType.STANDARD));

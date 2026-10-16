@@ -6,18 +6,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConsoleOrderNotifier implements OrderNotifier {
 
+    private static final String NOTIFICATION_PREFIX = "Notification : commande ";
     @Override
     public void notifyPaid(Order order) {
-        System.out.println("Notification : commande " + order.getId() + " payee");
+        System.out.println(NOTIFICATION_PREFIX + order.getId() + " payee");
     }
 
     @Override
     public void notifyShipped(Order order) {
-        System.out.println("Notification : commande " + order.getId() + " expediee");
+        System.out.println(NOTIFICATION_PREFIX + order.getId() + " expediee");
     }
 
     @Override
     public void notifyCancelled(Order order) {
-        System.out.println("Notification : commande " + order.getId() + " annulee");
+        System.out.println(NOTIFICATION_PREFIX + order.getId() + " annulee");
     }
 }
