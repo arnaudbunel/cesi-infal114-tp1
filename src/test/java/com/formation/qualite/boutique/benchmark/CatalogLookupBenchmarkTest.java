@@ -1,7 +1,7 @@
 package com.formation.qualite.boutique.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+
 import com.formation.qualite.boutique.model.Product;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,17 +22,27 @@ import org.junit.jupiter.api.Test;
 @Disabled("Benchmark manuel pour l'exercice Big O - retirer l'annotation pour l'executer")
 class CatalogLookupBenchmarkTest {
 
+    private static final int REQUESTED_PRODUCTS = 200;
+
     @Test
     void compareLinearScanVersusMapLookup() {
-        assertThat(1 + 1).isEqualTo(2); // assertion pour que le test soit valide, mais ne fait rien
         int[] catalogSizes = {100, 1_000, 10_000, 50_000};
 
         for (int size : catalogSizes) {
             List<Product> catalog = buildCatalog(size);
-            List<Long> requestedIds = sampleIds(catalog, 200);
+            List<Long> requestedIds = sampleIds(catalog, REQUESTED_PRODUCTS);
 
-            long linearDuration = timeLinearScan(catalog, requestedIds);
-            long mapDuration = timeMapLookup(catalog, requestedIds);
+            long start = System.nanoTime();
+            List<Product> foundByLinearScan = findByLinearScan(catalog, requestedIds);
+            long linearDuration = elapsedMillisSince(start);
+
+            Map<Long, Product> index = indexById(catalog);
+            start = System.nanoTime();
+            List<Product> foundByMap = findByMap(index, requestedIds);
+            long mapDuration = elapsedMillisSince(start);
+
+            // Les deux strategies doivent trouver exactement les memes produits.
+            assertThat(foundByMap).isEqualTo(foundByLinearScan);
 
             System.out.printf(
                     "Catalogue de %d produits - scan lineaire : %d ms / recherche par Map : %d ms%n",
@@ -40,7 +50,7 @@ class CatalogLookupBenchmarkTest {
         }
     }
 
-    private List<Product> buildCatalog(int size) {
+    private static List<Product> buildCatalog(int size) {
         List<Product> catalog = new ArrayList<>();
         for (long i = 0; i < size; i++) {
             Product product = new Product("Produit " + i, 10.0, 100);
@@ -50,7 +60,7 @@ class CatalogLookupBenchmarkTest {
         return catalog;
     }
 
-    private List<Long> sampleIds(List<Product> catalog, int count) {
+    private static List<Long> sampleIds(List<Product> catalog, int count) {
         List<Long> ids = new ArrayList<>();
         int step = Math.max(1, catalog.size() / count);
         for (int i = 0; i < catalog.size() && ids.size() < count; i += step) {
@@ -59,36 +69,45 @@ class CatalogLookupBenchmarkTest {
         return ids;
     }
 
-    private long timeLinearScan(List<Product> catalog, List<Long> requestedIds) {
-        long start = System.nanoTime();
+    private static List<Product> findByLinearScan(List<Product> catalog, List<Long> requestedIds) {
+        List<Product> found = new ArrayList<>();
         for (Long id : requestedIds) {
-            Product found = null;
+            Product match = null;
             for (Product candidate : catalog) {
                 if (candidate.getId().equals(id)) {
-                    found = candidate;
+                    match = candidate;
                     break;
                 }
             }
-            if (found == null) {
+            if (match == null) {
                 throw new IllegalStateException("Produit introuvable : " + id);
             }
+            found.add(match);
         }
-        return (System.nanoTime() - start) / 1_000_000;
+        return found;
     }
 
-    private long timeMapLookup(List<Product> catalog, List<Long> requestedIds) {
+    private static Map<Long, Product> indexById(List<Product> catalog) {
         Map<Long, Product> index = new HashMap<>();
         for (Product product : catalog) {
             index.put(product.getId(), product);
         }
+        return index;
+    }
 
-        long start = System.nanoTime();
+    private static List<Product> findByMap(Map<Long, Product> index, List<Long> requestedIds) {
+        List<Product> found = new ArrayList<>();
         for (Long id : requestedIds) {
-            Product found = index.get(id);
-            if (found == null) {
+            Product match = index.get(id);
+            if (match == null) {
                 throw new IllegalStateException("Produit introuvable : " + id);
             }
+            found.add(match);
         }
+        return found;
+    }
+
+    private static long elapsedMillisSince(long start) {
         return (System.nanoTime() - start) / 1_000_000;
     }
 }

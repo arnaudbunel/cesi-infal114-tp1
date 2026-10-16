@@ -1,24 +1,30 @@
 package com.formation.qualite.boutique.service.notification;
 
 import com.formation.qualite.boutique.model.Order;
-import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Component
+/**
+ * Implementation par defaut : trace les notifications dans les logs.
+ * Declaree comme bean par NotificationConfig.
+ */
 public class ConsoleOrderNotifier implements OrderNotifier {
 
-    private static final String NOTIFICATION_PREFIX = "Notification : commande ";
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConsoleOrderNotifier.class);
+    private static final String NOTIFICATION_MESSAGE = "Notification : commande {} {}";
+
     @Override
     public void notifyPaid(Order order) {
-        System.out.println(NOTIFICATION_PREFIX + order.getId() + " payee");
+        LOGGER.info(NOTIFICATION_MESSAGE, order.getId(), "payee");
     }
 
     @Override
     public void notifyShipped(Order order) {
-        System.out.println(NOTIFICATION_PREFIX + order.getId() + " expediee");
+        LOGGER.info(NOTIFICATION_MESSAGE, order.getId(), "expediee");
     }
 
     @Override
     public void notifyCancelled(Order order) {
-        System.out.println(NOTIFICATION_PREFIX + order.getId() + " annulee");
+        LOGGER.info(NOTIFICATION_MESSAGE, order.getId(), "annulee");
     }
 }

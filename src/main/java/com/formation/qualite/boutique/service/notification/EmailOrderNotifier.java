@@ -1,12 +1,16 @@
 package com.formation.qualite.boutique.service.notification;
 
 import com.formation.qualite.boutique.model.Order;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation par email, utilisee pour les communications
  * transactionnelles (confirmation de paiement, suivi d'expedition).
  */
 public class EmailOrderNotifier implements OrderNotifier {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmailOrderNotifier.class);
 
     @Override
     public void notifyPaid(Order order) {
@@ -20,10 +24,13 @@ public class EmailOrderNotifier implements OrderNotifier {
 
     @Override
     public void notifyCancelled(Order order) {
-        throw new UnsupportedOperationException("Pas d'email d'annulation pour le moment");
+        // Pas d'email d'annulation pour le moment. Lever une exception ici
+        // ferait echouer une annulation deja enregistree : on se contente
+        // de tracer, pour respecter le contrat de OrderNotifier.
+        LOGGER.info("Pas d'email d'annulation pour la commande {}", order.getId());
     }
 
-    private void send(String email, String subject) {
-        System.out.println("Email a " + email + " : " + subject);
+    private static void send(String email, String subject) {
+        LOGGER.info("Email a {} : {}", email, subject);
     }
 }

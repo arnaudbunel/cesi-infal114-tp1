@@ -3,7 +3,6 @@ package com.formation.qualite.boutique.service;
 import com.formation.qualite.boutique.dto.CreateOrderRequest;
 import com.formation.qualite.boutique.dto.OrderLineRequest;
 import com.formation.qualite.boutique.model.Customer;
-import com.formation.qualite.boutique.model.CustomerType;
 import com.formation.qualite.boutique.model.Order;
 import com.formation.qualite.boutique.model.OrderLine;
 import com.formation.qualite.boutique.model.OrderStatus;
@@ -14,28 +13,72 @@ import com.formation.qualite.boutique.repository.ProductRepository;
 import com.formation.qualite.boutique.service.exception.InsufficientStockException;
 import com.formation.qualite.boutique.service.exception.ResourceNotFoundException;
 import com.formation.qualite.boutique.service.notification.OrderNotifier;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import java.time.Clock;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrderService.class);
 
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final OrderNotifier notifier;
+    private final PricingCalculator pricingCalculator;
 
     public OrderService(CustomerRepository customerRepository, ProductRepository productRepository,
-            OrderRepository orderRepository, OrderNotifier notifier) {
+            OrderRepository orderRepository, OrderNotifier notifier, PricingCalculator pricingCalculator) {
         this.customerRepository = customerRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.notifier = notifier;
+        this.pricingCalculator = pricingCalculator;
     }
 
+    // Transactionnelle : la mise a jour des stocks et l'enregistrement de la
+    // commande reussissent ou echouent ensemble.
+    @Transactional
     public Order createOrder(CreateOrderRequest request) {
+        validateRequest(request);
+
+        Customer customer = customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Client introuvable : " + request.customerId()));
+
+        // Le catalogue est charge une fois puis parcouru pour chaque ligne,
+        // ce qui evite un appel repository supplementaire par ligne.
+        List<Product> catalog = productRepository.findAll();
+
+        Order order = new Order(customer);
+        order.setCreatedDate(LocalDateTime.now(Clock.systemUTC()));
+
+        double grossAmount = 0;
+        for (OrderLineRequest lineRequest : request.lines()) {
+            Product product = findInCatalog(catalog, lineRequest.productId());
+            checkStock(product, lineRequest.quantity());
+            order.addLine(new OrderLine(product, lineRequest.quantity(), product.getUnitPrice()));
+            grossAmount = grossAmount + (product.getUnitPrice() * lineRequest.quantity());
+        }
+
+        applyPricing(order, pricingCalculator.compute(customer, grossAmount));
+        order.setStatus(OrderStatus.CREATED);
+
+        int totalItems = countItems(order);
+        decrementStock(order);
+
+        Order saved = orderRepository.save(order);
+        LOGGER.info("Commande creee : {} articles={} montant final={}",
+                saved.getId(), totalItems, saved.getFinalAmount());
+
+        return saved;
+    }
+
+    private static void validateRequest(CreateOrderRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("La requete de commande est obligatoire");
         }
@@ -53,103 +96,42 @@ public class OrderService {
                 throw new IllegalArgumentException("La quantite doit etre positive");
             }
         }
-
-        Customer c = customerRepository.findById(request.customerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Client introuvable : " + request.customerId()));
-
-        // Le catalogue est charge une fois puis parcouru pour chaque ligne,
-        // ce qui evite un appel repository supplementaire par ligne.
-        List<Product> catalog = productRepository.findAll();
-
-        Order order = new Order(c);
-        Clock cl = Clock.systemUTC();
-        order.setCreatedDate(LocalDateTime.now(cl));
-
-        double grossAmount = 0;
-
-        for (OrderLineRequest lineRequest : request.lines()) {
-            Product p = null;
-            for (Product candidate : catalog) {
-                if (candidate.getId().equals(lineRequest.productId())) {
-                    p = candidate;
-                    break;
-                }
-            }
-
-            if (p == null) {
-                throw new ResourceNotFoundException("Produit introuvable : " + lineRequest.productId());
-            }
-
-            if (p.getStock() < lineRequest.quantity()) {
-                throw new InsufficientStockException("Stock insuffisant pour le produit : " + p.getName());
-            }
-
-            OrderLine line = new OrderLine(p, lineRequest.quantity(), p.getUnitPrice());
-            order.addLine(line);
-
-            grossAmount = grossAmount + (p.getUnitPrice() * lineRequest.quantity());
-        }
-
-        order.setGrossAmount(grossAmount);
-
-        double[] amounts = calc(c, grossAmount);
-        double discountAmount = amounts[0];
-        double shippingFee = amounts[1];
-        order.setDiscountAmount(discountAmount);
-        order.setShippingFee(shippingFee);
-        order.setFinalAmount(grossAmount - discountAmount + shippingFee);
-        order.setStatus(OrderStatus.CREATED);
-
-        int totalItems = 0;
-        for (OrderLine line : order.getLines()) {
-            totalItems = totalItems + line.getQuantity();
-        }
-
-        for (OrderLine line : order.getLines()) {
-            Product p = line.getProduct();
-            try {
-                p.setStock(p.getStock() - line.getQuantity());
-                productRepository.save(p);
-            } catch (Exception e) {
-                System.out.println("Erreur lors de la mise a jour du stock pour " + p.getName());
-            }
-        }
-
-        Order saved = orderRepository.save(order);
-        System.out.println("Commande creee : " + saved.getId()
-                + " articles=" + totalItems
-                + " montant final=" + saved.getFinalAmount());
-
-        return saved;
     }
 
-    private double[] calc(Customer c, double total) {
-        double rate;
-        if (c.getType() == CustomerType.PREMIUM) {
-            if (total > 1000) {
-                rate = 0.15;
-            } else {
-                rate = 0.10;
-            }
-        } else {
-            if (total > 1000) {
-                rate = 0.05;
-            } else {
-                rate = 0;
-            }
+    private static Product findInCatalog(List<Product> catalog, Long productId) {
+        return catalog.stream()
+                .filter(candidate -> candidate.getId().equals(productId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Produit introuvable : " + productId));
+    }
+
+    private static void checkStock(Product product, int quantity) {
+        if (product.getStock() < quantity) {
+            throw new InsufficientStockException("Stock insuffisant pour le produit : " + product.getName());
         }
+    }
 
-        double discountAmount = total * rate;
-        double tmp = total - discountAmount;
+    private static void applyPricing(Order order, PricingResult pricing) {
+        order.setGrossAmount(pricing.grossAmount());
+        order.setDiscountAmount(pricing.discountAmount());
+        order.setShippingFee(pricing.shippingFee());
+        order.setFinalAmount(pricing.finalAmount());
+    }
 
-        double shippingFee;
-        if (tmp > 500) {
-            shippingFee = 0;
-        } else {
-            shippingFee = 20;
+    private static int countItems(Order order) {
+        return order.getLines().stream()
+                .mapToInt(OrderLine::getQuantity)
+                .sum();
+    }
+
+    // Une erreur d'enregistrement du stock n'est plus ignoree : elle remonte
+    // et annule la transaction, au lieu de creer une commande incoherente.
+    private void decrementStock(Order order) {
+        for (OrderLine line : order.getLines()) {
+            Product product = line.getProduct();
+            product.setStock(product.getStock() - line.getQuantity());
+            productRepository.save(product);
         }
-
-        return new double[] {discountAmount, shippingFee};
     }
 
     public Order payOrder(Long id) {
@@ -189,8 +171,7 @@ public class OrderService {
     }
 
     public List<Order> getAllOrders() {
-        List<Order> result = orderRepository.findAll();
-        return result;
+        return orderRepository.findAll();
     }
 
     public Order getOrderById(Long id) {

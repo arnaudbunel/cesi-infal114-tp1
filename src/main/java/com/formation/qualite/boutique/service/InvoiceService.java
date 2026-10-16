@@ -1,7 +1,6 @@
 package com.formation.qualite.boutique.service;
 
 import com.formation.qualite.boutique.model.Customer;
-import com.formation.qualite.boutique.model.CustomerType;
 import com.formation.qualite.boutique.model.Order;
 import com.formation.qualite.boutique.model.OrderLine;
 import org.springframework.stereotype.Service;
@@ -13,6 +12,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class InvoiceService {
 
+    private static final String AMOUNT_LINE_END = " EUR\n";
+
+    private final PricingCalculator pricingCalculator;
+
+    public InvoiceService(PricingCalculator pricingCalculator) {
+        this.pricingCalculator = pricingCalculator;
+    }
+
     public String generateInvoiceText(Order order) {
         Customer customer = order.getCustomer();
 
@@ -21,10 +28,7 @@ public class InvoiceService {
             total = total + (line.getUnitPrice() * line.getQuantity());
         }
 
-        double[] amounts = calc(customer, total);
-        double discount = amounts[0];
-        double shipping = amounts[1];
-        double invoiceTotal = total - discount + shipping;
+        PricingResult pricing = pricingCalculator.compute(customer, total);
 
         StringBuilder invoice = new StringBuilder();
         invoice.append("Facture - Commande #").append(order.getId()).append("\n");
@@ -32,42 +36,13 @@ public class InvoiceService {
         for (OrderLine line : order.getLines()) {
             invoice.append(" - ").append(line.getProduct().getName())
                     .append(" x").append(line.getQuantity())
-                    .append(" = ").append(line.getUnitPrice() * line.getQuantity()).append(" EUR\n");
+                    .append(" = ").append(line.getUnitPrice() * line.getQuantity()).append(AMOUNT_LINE_END);
         }
-        invoice.append("Sous-total : ").append(total).append(" EUR\n");
-        invoice.append("Remise : ").append(discount).append(" EUR\n");
-        invoice.append("Livraison : ").append(shipping).append(" EUR\n");
-        invoice.append("Total : ").append(invoiceTotal).append(" EUR");
+        invoice.append("Sous-total : ").append(pricing.grossAmount()).append(AMOUNT_LINE_END);
+        invoice.append("Remise : ").append(pricing.discountAmount()).append(AMOUNT_LINE_END);
+        invoice.append("Livraison : ").append(pricing.shippingFee()).append(AMOUNT_LINE_END);
+        invoice.append("Total : ").append(pricing.finalAmount()).append(" EUR");
 
         return invoice.toString();
-    }
-
-    private double[] calc(Customer c, double total) {
-        double rate;
-        if (c.getType() == CustomerType.PREMIUM) {
-            if (total > 1000) {
-                rate = 0.15;
-            } else {
-                rate = 0.10;
-            }
-        } else {
-            if (total > 1000) {
-                rate = 0.05;
-            } else {
-                rate = 0;
-            }
-        }
-
-        double discountAmount = total * rate;
-        double tmp = total - discountAmount;
-
-        double shippingFee;
-        if (tmp > 500) {
-            shippingFee = 0;
-        } else {
-            shippingFee = 20;
-        }
-
-        return new double[] {discountAmount, shippingFee};
     }
 }

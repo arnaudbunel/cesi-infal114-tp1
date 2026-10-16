@@ -4,10 +4,18 @@ import com.formation.qualite.boutique.model.Product;
 import com.formation.qualite.boutique.repository.ProductRepository;
 import com.formation.qualite.boutique.service.exception.ResourceNotFoundException;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ProductService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProductService.class);
+
+    // Un prix est considere nul s'il vaut 0,00 EUR une fois arrondi au
+    // centime : comparer un double avec == serait fragile.
+    private static final double ZERO_PRICE_TOLERANCE = 0.005;
 
     private final ProductRepository productRepository;
 
@@ -17,13 +25,13 @@ public class ProductService {
 
     public Product createProduct(Product product) {
         if (isFreeProduct(product)) {
-            System.out.println("Produit cree a prix nul : " + product.getName());
+            LOGGER.warn("Produit cree a prix nul : {}", product.getName());
         }
         return productRepository.save(product);
     }
 
-    private boolean isFreeProduct(Product product) {
-        return product.getUnitPrice() == 0;
+    private static boolean isFreeProduct(Product product) {
+        return Math.abs(product.getUnitPrice()) < ZERO_PRICE_TOLERANCE;
     }
 
     public List<Product> getAllProducts() {
